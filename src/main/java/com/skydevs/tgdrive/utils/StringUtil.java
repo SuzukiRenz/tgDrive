@@ -14,14 +14,89 @@ public class StringUtil {
      * @return 前缀
      */
     public static String getPrefix(HttpServletRequest request) {
-        String protocol = request.getHeader("X-Forwarded-Proto") != null ? request.getHeader("X-Forwarded-Proto") : request.getScheme(); // 先代理请求头中获取协议
-        String host = request.getServerName(); // 获取主机名 localhost 或实际域名
-        int port = request.getHeader("X-Forwarded-Port") != null ? Integer.parseInt(request.getHeader("X-Forwarded-Port")) : request.getServerPort(); // 先从代理请求头中获取端口号 80 或其他
+        String protocol = headerOrDefault(request, "X-Forwarded-Proto", request.getScheme()); // 先从代理请求头中获取协议
+        String host = extractHost(request); // 优先从 Host / X-Forwarded-Host 中取值，避免反代场景下拿到容器内主机名
+        int port = extractPort(request, protocol); // 优先从代理请求头中获取端口号
         // 如果是默认端口，则省略端口号
         if ((protocol.equalsIgnoreCase("http") && port == 80) || (protocol.equalsIgnoreCase("https") && port == 443)) {
             return protocol + "://" + host;
         }
         return protocol + "://" + host + ":" + port;
+    }
+
+    private static String headerOrDefault(HttpServletRequest request, String name, String defaultValue) {
+        String value = request.getHeader(name);
+        return value != null && !value.trim().isEmpty() ? value.trim() : defaultValue;
+    }
+
+    private static String extractHost(HttpServletRequest request) {
+        String forwardedHost = request.getHeader("X-Forwarded-Host");
+        String hostHeader = (forwardedHost != null && !forwardedHost.trim().isEmpty()) ? forwardedHost : request.getHeader("Host");
+        if (hostHeader != null && !hostHeader.trim().isEmpty()) {
+            String firstHost = hostHeader.split(",")[0].trim();
+            if (firstHost.startsWith("[")) {
+                int end = firstHost.indexOf(']');
+                if (end > 0) {
+                    return firstHost.substring(0, end + 1);
+                }
+            }
+            int colonIndex = firstHost.lastIndexOf(':');
+            if (colonIndex > 0 && firstHost.indexOf(':') == colonIndex) {
+                return firstHost.substring(0, colonIndex);
+            }
+            return firstHost;
+        }
+        return request.getServerName();
+    }
+
+    private static int extractPort(HttpServletRequest request, String protocol) {
+        String forwardedPort = request.getHeader("X-Forwarded-Port");
+        if (forwardedPort != null && !forwardedPort.trim().isEmpty()) {
+            try {
+                return Integer.parseInt(forwardedPort.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
+        String forwardedHost = request.getHeader("X-Forwarded-Host");
+        String hostHeader = (forwardedHost != null && !forwardedHost.trim().isEmpty()) ? forwardedHost : request.getHeader("Host");
+        Integer portFromHost = extractPortFromHost(hostHeader);
+        if (portFromHost != null) {
+            return portFromHost;
+        }
+
+        int serverPort = request.getServerPort();
+        if (serverPort > 0) {
+            return serverPort;
+        }
+        return protocol.equalsIgnoreCase("https") ? 443 : 80;
+    }
+
+    private static Integer extractPortFromHost(String hostHeader) {
+        if (hostHeader == null || hostHeader.trim().isEmpty()) {
+            return null;
+        }
+        String firstHost = hostHeader.split(",")[0].trim();
+        if (firstHost.startsWith("[")) {
+            int end = firstHost.indexOf(']');
+            if (end > 0 && firstHost.length() > end + 2 && firstHost.charAt(end + 1) == ':') {
+                try {
+                    return Integer.parseInt(firstHost.substring(end + 2));
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+            return null;
+        }
+        int colonIndex = firstHost.lastIndexOf(':');
+        if (colonIndex > 0 && firstHost.indexOf(':') == colonIndex) {
+            try {
+                return Integer.parseInt(firstHost.substring(colonIndex + 1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     /**
