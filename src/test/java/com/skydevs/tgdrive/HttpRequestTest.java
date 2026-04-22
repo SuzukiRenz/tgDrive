@@ -1,41 +1,54 @@
 package com.skydevs.tgdrive;
 
+import com.skydevs.tgdrive.utils.StringUtil;
 import jakarta.servlet.http.HttpServletRequest;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@Slf4j
-@SpringBootTest
 public class HttpRequestTest {
 
+    @Test
+    void shouldOmit443ForHttpsBehindProxy() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader("X-Forwarded-Proto")).thenReturn("https");
+        when(request.getHeader("X-Forwarded-Host")).thenReturn("files.example.com");
+        when(request.getHeader("X-Forwarded-Port")).thenReturn("443");
+        when(request.getHeader("Host")).thenReturn("127.0.0.1:8085");
+        when(request.getScheme()).thenReturn("http");
+        when(request.getServerName()).thenReturn("localhost");
+        when(request.getServerPort()).thenReturn(8085);
+
+        assertEquals("https://files.example.com", StringUtil.getPrefix(request));
+    }
 
     @Test
-    void testPort() {
+    void shouldKeepCustomHttpsPort() {
         HttpServletRequest request = mock(HttpServletRequest.class);
-        when(request.getHeader("X-Forwarded-Proto")).thenReturn("https"); // 模拟代理协议
-        when(request.getHeader("Host")).thenReturn("example.com:443");   // 模拟 Host 头
-        when(request.getHeader("X-Forwarded-Port")).thenReturn("443");   // 模拟代理端口
-        when(request.getScheme()).thenReturn("http");                    // 默认协议
-        when(request.getServerName()).thenReturn("localhost");           // 默认主机名
-        when(request.getServerPort()).thenReturn(8080);                  // 默认端口
+        when(request.getHeader("X-Forwarded-Proto")).thenReturn("https");
+        when(request.getHeader("X-Forwarded-Host")).thenReturn("files.example.com:8443");
+        when(request.getHeader("X-Forwarded-Port")).thenReturn(null);
+        when(request.getHeader("Host")).thenReturn("127.0.0.1:8085");
+        when(request.getScheme()).thenReturn("http");
+        when(request.getServerName()).thenReturn("localhost");
+        when(request.getServerPort()).thenReturn(8085);
 
-        String protocol = request.getHeader("X-Forwarded-Proto") != null ?
-                request.getHeader("X-Forwarded-Proto") :
-                request.getScheme(); // 先代理请求头中获取协议
-        String host = request.getHeader("Host") != null ?
-                request.getHeader("Host").split(":")[0] : // 去除 Host 头中的端口
-                request.getServerName(); // 获取主机名 localhost 或实际域名
-        int port = request.getHeader("X-Forwarded-Port") != null ?
-                Integer.parseInt(request.getHeader("X-Forwarded-Port")) :
-                request.getServerPort(); // 先从代理请求头中获取端口号 80 或其他
-        // 如果是默认端口，则省略端口号
-        if ((protocol.equalsIgnoreCase("http") && port == 80) || (protocol.equalsIgnoreCase("https") && port == 443)) {
-            System.out.println(protocol + "://" + host);
-        }
-        System.out.println(protocol + "://" + host + ":" + port);
+        assertEquals("https://files.example.com:8443", StringUtil.getPrefix(request));
+    }
+
+    @Test
+    void shouldFallbackToHostHeaderWhenNoForwardedHeaders() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader("X-Forwarded-Proto")).thenReturn(null);
+        when(request.getHeader("X-Forwarded-Host")).thenReturn(null);
+        when(request.getHeader("X-Forwarded-Port")).thenReturn(null);
+        when(request.getHeader("Host")).thenReturn("files.example.com:80");
+        when(request.getScheme()).thenReturn("http");
+        when(request.getServerName()).thenReturn("localhost");
+        when(request.getServerPort()).thenReturn(8085);
+
+        assertEquals("http://files.example.com", StringUtil.getPrefix(request));
     }
 }
