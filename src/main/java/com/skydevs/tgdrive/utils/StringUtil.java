@@ -115,7 +115,7 @@ public class StringUtil {
 
     public static String normalizePublicBaseUrl(String rawUrl) {
         if (!hasText(rawUrl)) {
-            return rawUrl;
+            return null;
         }
 
         String value = rawUrl.trim();
@@ -130,8 +130,10 @@ public class StringUtil {
             int port = uri.getPort();
             String path = uri.getPath();
 
-            if (!hasText(scheme) || !hasText(host)) {
-                return value;
+            // 只接受绝对 http/https URL，避免把 /admin、admin 之类相对路径当成公开基址。
+            if (!hasText(scheme) || !hasText(host)
+                    || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))) {
+                return null;
             }
 
             boolean omitPort = port == -1
@@ -148,7 +150,7 @@ public class StringUtil {
             }
             return normalized.toString();
         } catch (URISyntaxException e) {
-            return value;
+            return null;
         }
     }
 
