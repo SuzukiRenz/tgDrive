@@ -5,6 +5,7 @@ import com.skydevs.tgdrive.exception.file.FailedToGetSizeException;
 import com.skydevs.tgdrive.mapper.FileMapper;
 import com.skydevs.tgdrive.service.DownloadService;
 import com.skydevs.tgdrive.service.FileStorageService;
+import com.skydevs.tgdrive.service.PublicUrlService;
 import com.skydevs.tgdrive.service.TelegramBotService;
 import com.skydevs.tgdrive.service.WebDavFileService;
 import com.skydevs.tgdrive.utils.StringUtil;
@@ -31,6 +32,7 @@ public class WebDavFileServiceImpl implements WebDavFileService {
     private final FileStorageService fileStorageService;
     private final TelegramBotService telegramBotService;
     private final DownloadService downloadService;
+    private final PublicUrlService publicUrlService;
 
     @Override
     public String uploadByWebDav(InputStream inputStream, HttpServletRequest request) {
@@ -72,9 +74,7 @@ public class WebDavFileServiceImpl implements WebDavFileService {
                 log.info("新增文件夹路径{}", dirPath);
             }
 
-            // 优先使用自定义URL，如果没有配置则使用请求中的URL
-            String customUrl = telegramBotService.getCustomUrl();
-            String prefix = (customUrl != null && !customUrl.trim().isEmpty()) ? customUrl.trim() : StringUtil.getPrefix(request);
+            String prefix = publicUrlService.resolveBaseUrl(request, telegramBotService.getCustomUrl());
             
             // WebDAV上传的文件默认设置为公开，因为WebDAV通常用于共享
             FileInfo fileInfo = FileInfo.builder()
