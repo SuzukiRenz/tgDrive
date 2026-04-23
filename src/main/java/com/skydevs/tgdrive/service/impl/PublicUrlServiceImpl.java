@@ -14,12 +14,16 @@ public class PublicUrlServiceImpl implements PublicUrlService {
 
     @Override
     public String resolveBaseUrl(HttpServletRequest request, String customUrl) {
-        if (StringUtil.hasText(customUrl)) {
-            return StringUtil.normalizePublicBaseUrl(customUrl);
+        String normalizedCustomUrl = StringUtil.normalizePublicBaseUrl(customUrl);
+        if (StringUtil.hasText(normalizedCustomUrl)) {
+            return normalizedCustomUrl;
         }
-        if (StringUtil.hasText(publicBaseUrl)) {
-            return StringUtil.normalizePublicBaseUrl(publicBaseUrl);
+
+        String normalizedPublicBaseUrl = StringUtil.normalizePublicBaseUrl(publicBaseUrl);
+        if (StringUtil.hasText(normalizedPublicBaseUrl)) {
+            return normalizedPublicBaseUrl;
         }
+
         return StringUtil.normalizePublicBaseUrl(StringUtil.getPrefix(request));
     }
 }
