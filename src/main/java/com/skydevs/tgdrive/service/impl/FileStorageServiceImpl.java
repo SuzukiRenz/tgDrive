@@ -16,6 +16,7 @@ import com.skydevs.tgdrive.exception.file.UploadFileIsNullException;
 import com.skydevs.tgdrive.mapper.FileMapper;
 import com.skydevs.tgdrive.result.PageResult;
 import com.skydevs.tgdrive.service.FileStorageService;
+import com.skydevs.tgdrive.service.PublicUrlService;
 import com.skydevs.tgdrive.service.TelegramBotService;
 import com.skydevs.tgdrive.utils.StringUtil;
 import com.skydevs.tgdrive.utils.UserFriendly;
@@ -58,6 +59,9 @@ public class FileStorageServiceImpl implements FileStorageService {
     private TelegramBotService telegramBotService;
 
     @Autowired
+    private PublicUrlService publicUrlService;
+
+    @Autowired
     private UploadProgressWebSocketHandler uploadProgressWebSocketHandler;
 
     @Autowired
@@ -75,8 +79,7 @@ public class FileStorageServiceImpl implements FileStorageService {
         String downloadUrl;
         if (multipartFile != null && !multipartFile.isEmpty()) {
             try (InputStream inputStream = multipartFile.getInputStream()) {
-                // 优先使用自定义URL，如果没有配置则使用请求中的URL
-                String prefix = StringUtil.getPrefix(request);
+                String prefix = publicUrlService.resolveBaseUrl(request, telegramBotService.getCustomUrl());
                 String filename = multipartFile.getOriginalFilename();
                 long size = multipartFile.getSize();
 
@@ -349,7 +352,7 @@ public class FileStorageServiceImpl implements FileStorageService {
      */
     @Override
     public void updateUrl(HttpServletRequest request) {
-        String prefix = StringUtil.getPrefix(request);
+        String prefix = publicUrlService.resolveBaseUrl(request, telegramBotService.getCustomUrl());
         fileMapper.updateUrl(prefix);
     }
 
