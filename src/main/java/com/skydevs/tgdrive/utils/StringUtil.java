@@ -3,6 +3,8 @@ package com.skydevs.tgdrive.utils;
 import com.pengrad.telegrambot.model.Message;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -14,10 +16,18 @@ public class StringUtil {
      * @return 前缀
      */
     public static String getPrefix(HttpServletRequest request) {
-        String protocol = headerOrDefault(request, "X-Forwarded-Proto", request.getScheme()); // 先从代理请求头中获取协议
-        String host = extractHost(request); // 优先从 Host / X-Forwarded-Host 中取值，避免反代场景下拿到容器内主机名
-        int port = extractPort(request, protocol); // 优先从代理请求头中获取端口号
-        // 如果是默认端口，则省略端口号
+        String protocol = headerOrDefault(request, "X-Forwarded-Proto", request.getScheme());
+        String host = extractHost(request);
+        int port = extractPort(request, protocol);
+
+        // 对外公开链接中，标准端口不应显式出现在URL里；
+        // 对于反向代理 / CDN / Tunnel 场景，https + 80、http + 443 通常是源站回源端口污染，统一纠正。
+        if ("https".equalsIgnoreCase(protocol) && port == 80) {
+            port = 443;
+        } else if ("http".equalsIgnoreCase(protocol) && port == 443) {
+            port = 80;
+        }
+
         if ((protocol.equalsIgnoreCase("http") && port == 80) || (protocol.equalsIgnoreCase("https") && port == 443)) {
             return protocol + "://" + host;
         }
@@ -97,6 +107,49 @@ public class StringUtil {
             }
         }
         return null;
+    }
+
+    public static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    public static String normalizePublicBaseUrl(String rawUrl) {
+        if (!hasText(rawUrl)) {
+            return rawUrl;
+        }
+
+        String value = rawUrl.trim();
+        while (value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+
+        try {
+            URI uri = new URI(value);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            int port = uri.getPort();
+            String path = uri.getPath();
+
+            if (!hasText(scheme) || !hasText(host)) {
+                return value;
+            }
+
+            boolean omitPort = port == -1
+                    || ("http".equalsIgnoreCase(scheme) && port == 80)
+                    || ("https".equalsIgnoreCase(scheme) && port == 443);
+
+            StringBuilder normalized = new StringBuilder();
+            normalized.append(scheme).append("://").append(host);
+            if (!omitPort) {
+                normalized.append(":").append(port);
+            }
+            if (hasText(path) && !"/".equals(path)) {
+                normalized.append(path);
+            }
+            return normalized.toString();
+        } catch (URISyntaxException e) {
+            return value;
+        }
     }
 
     /**
